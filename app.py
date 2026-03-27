@@ -52,7 +52,7 @@ def clean_text(text):
 # -------------------- UI --------------------
 st.title("📰 Fake News Detection App")
 st.markdown("""
-Paste any news article or headline below and click **Check News** to verify whether it's **Fake** or **Legit**.
+Paste any news article below and click **Check News** to verify whether it's **Fake** or **Legit**.
 """)
 
 news_text = st.text_area("✍️ Enter News Text Here", height=250, placeholder="Paste the news content here...")
