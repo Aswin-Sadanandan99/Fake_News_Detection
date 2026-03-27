@@ -8,6 +8,8 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
 import gzip
+nltk.download('stopwords')
+nltk.download('punkt')
 
 # -------------------- Page Config --------------------
 st.set_page_config(
