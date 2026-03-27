@@ -1,120 +1,77 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pickle
+import pickle as pkl
+import re
+import string
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import SnowballStemmer
 import gzip
 
-# Page configuration
+# -------------------- Page Config --------------------
 st.set_page_config(
-    page_title="Fraud Detection System",
-    page_icon="💳",
-    layout="wide"
+    page_title="Fake News Detector",
+    page_icon="📰",
+    layout="centered"
 )
 
-# Load model and columns
-with gzip.open("model.pkl.gz", "rb") as f:
-    model = pickle.load(f)
-columns = pickle.load(open("columns.pkl", "rb"))
+# -------------------- Caching Model --------------------
+@st.cache_resource
+def load_model():
+    with gzip.open("model.pkl.gz", "rb") as f:
+        model = pkl.load(f)
+    vect = pkl.load(open("vect.pkl", "rb"))
+    return model, vect
 
-# ---------- HEADER ----------
-st.markdown(
-    """
-    <h1 style='text-align: center; color: #4CAF50;'>
-        💳 AI Powered Fraud Detection System
-    </h1>
-    <p style='text-align: center;'>
-        Enter transaction details to predict whether it is Fraud or Legitimate.
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+model, vect = load_model()
 
-st.markdown("---")
+# -------------------- Text Preprocessing --------------------
+def clean_text(text):
+    text = text.lower()
+    text = re.sub('\[.*?\]', '', text)
+    text = re.sub("\\W", " ", text)
+    text = re.sub('https?://\S+|www\.\S+', '', text)
+    text = re.sub('<.*?>+', '', text)
+    text = re.sub('[%s]' % re.escape(string.punctuation), '', text)
+    text = re.sub('\n', '', text)
+    text = re.sub('\w*\d\w*', '', text)
 
-# ---------- SIDEBAR INPUTS ----------
-st.sidebar.header("📥 Transaction Details")
+    stop_words = set(stopwords.words('english'))
+    words = word_tokenize(text)
+    words = [w for w in words if w not in stop_words]
 
-amount = st.sidebar.number_input("Transaction Amount", min_value=0.0)
-oldbalanceOrg = st.sidebar.number_input("Old Balance (Origin)", min_value=0.0)
-newbalanceOrig = st.sidebar.number_input("New Balance (Origin)", min_value=0.0)
-oldbalanceDest = st.sidebar.number_input("Old Balance (Destination)", min_value=0.0)
-newbalanceDest = st.sidebar.number_input("New Balance (Destination)", min_value=0.0)
+    stemmer = SnowballStemmer("english")
+    stems = [stemmer.stem(word) for word in words]
 
-type_option = st.sidebar.selectbox(
-    "Transaction Type",
-    ["PAYMENT", "TRANSFER", "CASH_OUT", "DEBIT"]
-)
+    return " ".join(stems)
 
-hours = st.sidebar.slider(
-    "Hours to Complete Transaction",
-    min_value=1,
-    max_value=800
-)
+# -------------------- UI --------------------
+st.title("📰 Fake News Detection App")
+st.markdown("""
+Paste any news article or headline below and click **Check News** to verify whether it's **Fake** or **Legit**.
+""")
 
-st.sidebar.markdown("---")
-predict_button = st.sidebar.button("🚀 Check Fraud")
+news_text = st.text_area("✍️ Enter News Text Here", height=250, placeholder="Paste the news content here...")
 
-# ---------- MAIN CONTENT ----------
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📊 Transaction Summary")
-    st.write(f"**Amount:** ₹ {amount}")
-    st.write(f"**Type:** {type_option}")
-    st.write(f"**Completion Time:** {hours} hours")
-
-with col2:
-    st.subheader("💼 Balance Information")
-    st.write(f"Origin: {oldbalanceOrg} ➜ {newbalanceOrig}")
-    st.write(f"Destination: {oldbalanceDest} ➜ {newbalanceDest}")
-
-st.markdown("---")
-
-# ---------- PREDICTION ----------
-if predict_button:
-
-    input_dict = {col: 0 for col in columns}
-
-    input_dict['amount'] = amount
-    input_dict['oldbalanceOrg'] = oldbalanceOrg
-    input_dict['newbalanceOrig'] = newbalanceOrig
-    input_dict['oldbalanceDest'] = oldbalanceDest
-    input_dict['newbalanceDest'] = newbalanceDest
-    input_dict['hours'] = hours
-
-    type_column = f"type_{type_option}"
-    if type_column in input_dict:
-        input_dict[type_column] = 1
-
-    input_df = pd.DataFrame([input_dict])
-
-    prediction = model.predict(input_df)[0]
-    probability = model.predict_proba(input_df)[0][1]
-
-    st.subheader("🔎 Prediction Result")
-
-    # Progress bar
-    st.progress(int(probability * 100))
-
-    if prediction == 1:
-        st.error("⚠️ Fraudulent Transaction Detected!")
-        st.markdown(
-            f"### Fraud Probability: **{probability:.2%}**"
-        )
+# -------------------- Prediction --------------------
+if st.button("🔍 Check News"):
+    if news_text.strip() == "":
+        st.warning("Please enter some news text first.")
     else:
-        st.success("✅ Legitimate Transaction")
-        st.markdown(
-            f"### Fraud Probability: **{probability:.2%}**"
-        )
+        with st.spinner("Analyzing the news content..."):
+            processed = clean_text(news_text)
+            vect_text = vect.transform([processed])
+            prediction = model.predict(vect_text)[0]
 
-    st.markdown("---")
+        st.markdown("---")
+        st.subheader("🧾 Prediction Result")
 
-    # Risk Level Indicator
-    if probability < 0.3:
-        st.info("🟢 Risk Level: LOW")
-    elif probability < 0.7:
-        st.warning("🟡 Risk Level: MEDIUM")
-    else:
-        st.error("🔴 Risk Level: HIGH")
+        if prediction == 0:
+            st.error("🚨 This News is **Fake News**")
+        else:
+            st.success("✅ This News is **Legit / Real**")
+
+# -------------------- Footer --------------------
+st.markdown("---")
+st.caption("Built with using Streamlit | Machine Learning Fake News Classifier")
