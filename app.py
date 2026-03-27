@@ -10,7 +10,7 @@ from nltk.stem import SnowballStemmer
 import gzip
 import nltk
 nltk.download('stopwords')
-nltk.download('punkt')
+nltk.download('punkt_tab')
 
 # -------------------- Page Config --------------------
 st.set_page_config(
